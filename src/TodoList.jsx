@@ -7,25 +7,7 @@ const AddTodo = ({ addTodo }) => {
       const text = input.value.trim();
 
       if (text) {
-        const newTodo = await fetch("http://localhost:3000/todos", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            text: text,
-            done: false,
-          }),
-        }).then((response) => {
-          if (!response.ok) {
-            throw new Error("Erro ao adicionar a tarefa");
-          }
-          return response.json();
-        });
-
-        console.log(newTodo);
-
-        addTodo(newTodo);
+        await addTodo({ text, done: false });
         input.value = "";
       }
     }
@@ -81,9 +63,8 @@ const TodoItem = ({ todo, markTodoAsDone }) => {
   );
 };
 
-const TodoList = () => {
+const TodoList = ({ token }) => {
   const [todos, setTodos] = useState([]);
-
   const [filter, setFilter] = useState("all");
 
   const filterBy = (todo) => {
@@ -97,12 +78,13 @@ const TodoList = () => {
   };
 
   useEffect(() => {
+    const fetchOptions = {
+      headers: { Authorization: `Bearer ${token}` },
+    };
     const fetchTodos = async () => {
       try {
-        const response = await fetch("http://localhost:3000/todos");
-        if (!response.ok) {
-          throw new Error("Erro ao buscar os dados");
-        }
+        const response = await fetch("http://localhost:3000/todos", fetchOptions);
+        if (!response.ok) throw new Error("Erro ao buscar os dados");
         const data = await response.json();
         setTodos(data);
       } catch (error) {
@@ -111,33 +93,46 @@ const TodoList = () => {
     };
 
     fetchTodos();
-  }, []);
+  }, [token]);
 
-  const addTodo = (newTodo) => {
-    console.log(newTodo);
-    setTodos((prevTodos) => [...prevTodos, newTodo]);
-    if (filter === "done") applyFilter("all");
+  const addTodo = async (newTodo) => {
+    try {
+      const response = await fetch("http://localhost:3000/todos", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(newTodo),
+      });
+
+      if (!response.ok) throw new Error("Erro ao adicionar a tarefa");
+      const createdTodo = await response.json();
+      setTodos((prevTodos) => [...prevTodos, createdTodo]);
+    } catch (error) {
+      console.error("Erro ao adicionar a tarefa:", error);
+    }
   };
 
   const markTodoAsDone = async (id) => {
-    const updatedTodo = await fetch(`http://localhost:3000/todos/${id}`, {
-      method: "PUT",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        done: true,
-      }),
-    }).then((response) => {
-      if (!response.ok) {
-        throw new Error("Erro ao marcar a tarefa como concluída");
-      }
-      return response.json();
-    });
+    try {
+      const response = await fetch(`http://localhost:3000/todos/${id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ done: true }),
+      });
 
-    setTodos((prevTodos) =>
-      prevTodos.map((todo) => (todo.id === updatedTodo.id ? updatedTodo : todo))
-    );
+      if (!response.ok) throw new Error("Erro ao marcar a tarefa como concluída");
+      const updatedTodo = await response.json();
+      setTodos((prevTodos) =>
+        prevTodos.map((todo) => (todo.id === updatedTodo.id ? updatedTodo : todo))
+      );
+    } catch (error) {
+      console.error("Erro ao marcar a tarefa como concluída:", error);
+    }
   };
 
   return (
@@ -152,8 +147,8 @@ const TodoList = () => {
 
       {todos ? (
         <ul id="todo-list">
-          {todos.filter(filterBy).map((todo, index) => (
-            <TodoItem key={index} todo={todo} markTodoAsDone={markTodoAsDone} />
+          {todos.filter(filterBy).map((todo) => (
+            <TodoItem key={todo.id} todo={todo} markTodoAsDone={markTodoAsDone} />
           ))}
         </ul>
       ) : (
